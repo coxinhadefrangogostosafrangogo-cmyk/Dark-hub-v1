@@ -1,0 +1,792 @@
+-- Script principal otimizado - Dark Hub v1.5
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+-- Aguardar o personagem spawnar
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- Variáveis de estado
+local godMode = false
+local antiKnockback = false
+local infiniteJump = false
+local espEnabled = false
+local gravityValue = 196.2
+local speedValue = 16
+local selectedPlayer = nil
+local flingActive = false
+local flyActive = false
+local cameraViewActive = false
+local viewCamera = nil
+local menuMinimized = false
+
+-- Criar GUI principal
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DarkHub"
+ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Container principal QUADRADO
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainContainer"
+MainFrame.Size = UDim2.new(0, 420, 0, 420) -- Quadrado perfeito
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MainFrame.BackgroundTransparency = 0.15
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 15)
+Corner.Parent = MainFrame
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(100, 0, 255)
+Stroke.Thickness = 2
+Stroke.Transparency = 0.2
+Stroke.Parent = MainFrame
+
+-- Título
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(0, 180, 0, 30)
+Title.Position = UDim2.new(0, 10, 0, 5)
+Title.BackgroundTransparency = 1
+Title.Text = "DARK HUB v1.5"
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 18
+Title.TextColor3 = Color3.fromRGB(150, 0, 255)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
+
+-- Efeito neon no título
+coroutine.wrap(function()
+    local hue = 0
+    while ScreenGui and ScreenGui.Parent do
+        hue = (hue + 0.005) % 1
+        Title.TextColor3 = Color3.fromHSV(hue, 1, 1)
+        RunService.Heartbeat:Wait()
+    end
+end)()
+
+-- Botão minimizar/maximizar
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Position = UDim2.new(1, -70, 0, 5)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+MinimizeButton.BackgroundTransparency = 0.3
+MinimizeButton.Text = "−"
+MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.TextSize = 20
+MinimizeButton.Parent = MainFrame
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(1, 0)
+MinCorner.Parent = MinimizeButton
+
+-- Botão fechar
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+CloseButton.BackgroundTransparency = 0.3
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 16
+CloseButton.Parent = MainFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(1, 0)
+CloseCorner.Parent = CloseButton
+
+-- Bolinha de menu minimizado
+local MinimizedBall = Instance.new("TextButton")
+MinimizedBall.Size = UDim2.new(0, 60, 0, 60)
+MinimizedBall.Position = UDim2.new(0.5, 0, 0.5, 0)
+MinimizedBall.AnchorPoint = Vector2.new(0.5, 0.5)
+MinimizedBall.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MinimizedBall.BackgroundTransparency = 0.3
+MinimizedBall.Text = ">;3"
+MinimizedBall.TextColor3 = Color3.fromRGB(150, 0, 255)
+MinimizedBall.Font = Enum.Font.GothamBlack
+MinimizedBall.TextSize = 20
+MinimizedBall.Visible = false
+MinimizedBall.Parent = ScreenGui
+
+local BallCorner = Instance.new("UICorner")
+BallCorner.CornerRadius = UDim.new(1, 0)
+BallCorner.Parent = MinimizedBall
+
+local BallStroke = Instance.new("UIStroke")
+BallStroke.Color = Color3.fromRGB(150, 0, 255)
+BallStroke.Thickness = 2
+BallStroke.Transparency = 0.3
+BallStroke.Parent = MinimizedBall
+
+-- Botões na lateral esquerda (layout vertical)
+local SideButtons = Instance.new("Frame")
+SideButtons.Size = UDim2.new(0, 55, 1, -40)
+SideButtons.Position = UDim2.new(0, 5, 0, 45)
+SideButtons.BackgroundTransparency = 1
+SideButtons.Parent = MainFrame
+
+local SideList = Instance.new("UIListLayout")
+SideList.FillDirection = Enum.FillDirection.Vertical
+SideList.SortOrder = Enum.SortOrder.LayoutOrder
+SideList.Padding = UDim.new(0, 4)
+SideList.Parent = SideButtons
+
+-- Criar botão lateral estiloso otimizado
+local function createSideButton(parent, text, emoji)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, -5, 0, 52)
+    Button.BackgroundColor3 = Color3.fromRGB(60, 20, 100)
+    Button.BackgroundTransparency = 0.3
+    Button.Text = emoji
+    Button.Font = Enum.Font.GothamBold
+    Button.TextSize = 22
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.Parent = parent
+    
+    local BTNCorner = Instance.new("UICorner")
+    BTNCorner.CornerRadius = UDim.new(0, 10)
+    BTNCorner.Parent = Button
+    
+    local BTNStroke = Instance.new("UIStroke")
+    BTNStroke.Color = Color3.fromRGB(150, 0, 255)
+    BTNStroke.Thickness = 1.5
+    BTNStroke.Transparency = 0.4
+    BTNStroke.Parent = Button
+    
+    local Tooltip = Instance.new("TextLabel")
+    Tooltip.Size = UDim2.new(0, 100, 0, 20)
+    Tooltip.Position = UDim2.new(1, 10, 0.5, -10)
+    Tooltip.BackgroundTransparency = 1
+    Tooltip.Text = text:gsub(" [%z\1-\127\194-\244][\128-\191]*", "")
+    Tooltip.Font = Enum.Font.Gotham
+    Tooltip.TextSize = 11
+    Tooltip.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Tooltip.TextXAlignment = Enum.TextXAlignment.Left
+    Tooltip.Visible = false
+    Tooltip.Parent = Button
+    
+    Button.MouseEnter:Connect(function()
+        TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundTransparency = 0.1, Size = UDim2.new(1, -5, 0, 52)}):Play()
+        Tooltip.Visible = true
+    end)
+    
+    Button.MouseLeave:Connect(function()
+        TweenService:Create(Button, TweenInfo.new(0.2), {BackgroundTransparency = 0.3, Size = UDim2.new(1, -5, 0, 52)}):Play()
+        Tooltip.Visible = false
+    end)
+    
+    return Button
+end
+
+-- Criar toggle otimizado
+local function createToggle(parent, text, default, callback)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = UDim2.new(1, -10, 0, 35)
+    ToggleFrame.BackgroundTransparency = 1
+    ToggleFrame.Parent = parent
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.65, 0, 1, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = text
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextSize = 13
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    local Switch = Instance.new("TextButton")
+    Switch.Size = UDim2.new(0, 40, 0, 20)
+    Switch.Position = UDim2.new(1, -40, 0.5, -10)
+    Switch.BackgroundColor3 = default and Color3.fromRGB(150, 0, 255) or Color3.fromRGB(80, 80, 80)
+    Switch.Text = ""
+    Switch.AutoButtonColor = false
+    Switch.Parent = ToggleFrame
+    
+    local SwitchCorner = Instance.new("UICorner")
+    SwitchCorner.CornerRadius = UDim.new(1, 0)
+    SwitchCorner.Parent = Switch
+    
+    local Knob = Instance.new("Frame")
+    Knob.Size = UDim2.new(0, 16, 0, 16)
+    Knob.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Knob.Parent = Switch
+    
+    local KnobCorner = Instance.new("UICorner")
+    KnobCorner.CornerRadius = UDim.new(1, 0)
+    KnobCorner.Parent = Knob
+    
+    local toggled = default
+    Switch.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        local targetPos = toggled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        local targetColor = toggled and Color3.fromRGB(150, 0, 255) or Color3.fromRGB(80, 80, 80)
+        
+        TweenService:Create(Knob, TweenInfo.new(0.2), {Position = targetPos}):Play()
+        TweenService:Create(Switch, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+        
+        if callback then callback(toggled) end
+    end)
+    
+    return ToggleFrame
+end
+
+-- Criar slider otimizado
+local function createSlider(parent, text, min, max, default, callback)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Size = UDim2.new(1, -10, 0, 42)
+    SliderFrame.BackgroundTransparency = 1
+    SliderFrame.Parent = parent
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, 0, 0, 16)
+    Label.BackgroundTransparency = 1
+    Label.Text = text .. ": " .. default
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextSize = 12
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = SliderFrame
+    
+    local SliderBg = Instance.new("Frame")
+    SliderBg.Size = UDim2.new(1, -5, 0, 6)
+    SliderBg.Position = UDim2.new(0, 0, 0, 24)
+    SliderBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    SliderBg.Parent = SliderFrame
+    
+    local SliderCorner = Instance.new("UICorner")
+    SliderCorner.CornerRadius = UDim.new(1, 0)
+    SliderCorner.Parent = SliderBg
+    
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    Fill.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+    Fill.BorderSizePixel = 0
+    Fill.Parent = SliderBg
+    
+    local FillCorner = Instance.new("UICorner")
+    FillCorner.CornerRadius = UDim.new(1, 0)
+    FillCorner.Parent = Fill
+    
+    local KnobSlider = Instance.new("Frame")
+    KnobSlider.Size = UDim2.new(0, 14, 0, 14)
+    KnobSlider.Position = UDim2.new((default - min) / (max - min), -7, 0.5, -7)
+    KnobSlider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    KnobSlider.Parent = SliderBg
+    
+    local KnobCorner2 = Instance.new("UICorner")
+    KnobCorner2.CornerRadius = UDim.new(1, 0)
+    KnobCorner2.Parent = KnobSlider
+    
+    local dragging = false
+    
+    local function updateValue(input)
+        local pos = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
+        local value = min + (max - min) * pos
+        Fill.Size = UDim2.new(pos, 0, 1, 0)
+        KnobSlider.Position = UDim2.new(pos, -7, 0.5, -7)
+        Label.Text = text .. ": " .. math.round(value)
+        if callback then callback(value) end
+    end
+    
+    SliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            updateValue(input)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateValue(input)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    
+    return SliderFrame
+end
+
+-- Conteúdo principal (área à direita dos botões laterais)
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, -75, 1, -50)
+ContentFrame.Position = UDim2.new(0, 65, 0, 45)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+-- Container para diferentes abas
+local function createContentPage(name)
+    local Page = Instance.new("ScrollingFrame")
+    Page.Size = UDim2.new(1, 0, 1, 0)
+    Page.BackgroundTransparency = 1
+    Page.ScrollBarThickness = 4
+    Page.ScrollBarImageColor3 = Color3.fromRGB(150, 0, 255)
+    Page.Visible = false
+    Page.BorderSizePixel = 0
+    Page.Parent = ContentFrame
+    Page.ScrollingEnabled = true
+    Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    
+    local PageList = Instance.new("UIListLayout")
+    PageList.SortOrder = Enum.SortOrder.LayoutOrder
+    PageList.Padding = UDim.new(0, 5)
+    PageList.Parent = Page
+    
+    return Page
+end
+
+-- Criar páginas
+local pages = {}
+local pageNames = {"ESP 👁️", "Troll 🌀", "Teleport 📍", "Player ⚡", "Combat 🛡️", "Visual 🌌"}
+for _, name in ipairs(pageNames) do
+    pages[name] = createContentPage(name)
+end
+
+-- Criar botões laterais
+for i, name in ipairs(pageNames) do
+    local emoji = string.match(name, "[%z\1-\127\194-\244][\128-\191]*")
+    local btn = createSideButton(SideButtons, name, emoji)
+    btn.MouseButton1Click:Connect(function()
+        for pname, page in pairs(pages) do
+            page.Visible = (pname == name)
+        end
+    end)
+end
+
+-- ============ FUNCIONALIDADES OTIMIZADAS ============
+
+-- GOD MODE
+createToggle(pages["Combat 🛡️"], "God Mode", false, function(toggled)
+    godMode = toggled
+    if godMode and Character then
+        local hum = Character:FindFirstChild("Humanoid")
+        if hum then
+            hum.MaxHealth = 999999
+            hum.Health = 999999
+        end
+    end
+end)
+
+-- Anti-Knockback
+createToggle(pages["Combat 🛡️"], "Anti-Knockback", false, function(toggled)
+    antiKnockback = toggled
+    if antiKnockback and RootPart then
+        RootPart.CustomPhysicalProperties = PhysicalProperties.new(9999, 0.3, 0.5)
+    elseif RootPart then
+        RootPart.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.3, 0.5)
+    end
+end)
+
+-- Infinite Jump
+createToggle(pages["Player ⚡"], "Infinite Jump", false, function(toggled)
+    infiniteJump = toggled
+end)
+
+-- Speed
+createSlider(pages["Player ⚡"], "Speed", 16, 200, 16, function(value)
+    speedValue = value
+    if Humanoid then
+        Humanoid.WalkSpeed = value
+    end
+end)
+
+-- Gravity
+createSlider(pages["Player ⚡"], "Gravity", 0, 400, 196.2, function(value)
+    gravityValue = value
+    Workspace.Gravity = value
+end)
+
+-- Jump Power
+createSlider(pages["Player ⚡"], "JumpPower", 50, 300, 50, function(value)
+    if Humanoid then
+        Humanoid.JumpPower = value
+    end
+end)
+
+-- FOV
+createSlider(pages["Visual 🌌"], "FOV", 30, 120, 70, function(value)
+    Workspace.CurrentCamera.FieldOfView = value
+end)
+
+-- Skybox
+createToggle(pages["Visual 🌌"], "Custom Skybox", false, function(toggled)
+    if toggled then
+        local sky = Instance.new("Sky")
+        sky.SkyboxBk = "rbxassetid://123456789"
+        sky.SkyboxDn = "rbxassetid://100249152457718"
+        sky.SkyboxFt = "rbxassetid://100249152457718"
+        sky.SkyboxLf = "rbxassetid://100249152457718"
+        sky.SkyboxRt = "rbxassetid://100249152457718"
+        sky.SkyboxUp = "rbxassetid://100249152457718"
+        sky.Parent = Workspace
+    else
+        for _, v in pairs(Workspace:GetChildren()) do
+            if v:IsA("Sky") then v:Destroy() end
+        end
+    end
+end)
+
+-- ESP
+createToggle(pages["ESP 👁️"], "Player ESP", false, function(toggled)
+    espEnabled = toggled
+    if not toggled then
+        for _, v in pairs(Workspace:GetDescendants()) do
+            if v.Name == "ESP_Highlight" and v:IsA("Highlight") then
+                v:Destroy()
+            end
+        end
+    end
+end)
+
+-- ESP Loop otimizado
+coroutine.wrap(function()
+    while task.wait(1) do
+        if espEnabled then
+            for _, plr in pairs(Players:GetPlayers()) do
+                if plr ~= Player and plr.Character then
+                    local highlight = plr.Character:FindFirstChild("ESP_Highlight")
+                    if not highlight then
+                        highlight = Instance.new("Highlight")
+                        highlight.Name = "ESP_Highlight"
+                        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        highlight.Parent = plr.Character
+                    end
+                end
+            end
+        end
+    end
+end)()
+
+-- VOO (Fly)
+createToggle(pages["Player ⚡"], "Fly Mode", false, function(toggled)
+    flyActive = toggled
+    if flyActive then
+        coroutine.wrap(function()
+            while flyActive and RootPart do
+                local velocity = Vector3.new(0, 0, 0)
+                local camera = Workspace.CurrentCamera
+                local lookVector = camera.CFrame.LookVector
+                local rightVector = camera.CFrame.RightVector
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    velocity += lookVector * 50
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    velocity -= lookVector * 50
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    velocity -= rightVector * 50
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    velocity += rightVector * 50
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    velocity += Vector3.new(0, 50, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                    velocity -= Vector3.new(0, 50, 0)
+                end
+                
+                if Humanoid then
+                    Humanoid.PlatformStand = true
+                    Humanoid.WalkSpeed = 0
+                end
+                
+                RootPart.Velocity = velocity
+                task.wait()
+            end
+            
+            if Humanoid then
+                Humanoid.PlatformStand = false
+                Humanoid.WalkSpeed = speedValue
+            end
+        end)()
+    end
+end)
+
+-- FLING (Toggle)
+createToggle(pages["Troll 🌀"], "Fling Mode", false, function(toggled)
+    flingActive = toggled
+    if flingActive then
+        coroutine.wrap(function()
+            while flingActive and RootPart and selectedPlayer do
+                local targetRoot = selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if targetRoot then
+                    for i = 1, 5 do
+                        RootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -2)
+                        RootPart.Velocity = Vector3.new(math.random(-300, 300), math.random(100, 500), math.random(-300, 300))
+                        task.wait()
+                    end
+                end
+                task.wait(0.5)
+            end
+        end)()
+    end
+end)
+
+-- CÂMERA DOS JOGADORES
+createToggle(pages["ESP 👁️"], "Camera View", false, function(toggled)
+    cameraViewActive = toggled
+    if not cameraViewActive then
+        Workspace.CurrentCamera.CameraSubject = Humanoid
+        viewCamera = nil
+    end
+end)
+
+-- Atualizar visualização da câmera
+coroutine.wrap(function()
+    while task.wait() do
+        if cameraViewActive and selectedPlayer and selectedPlayer.Character then
+            local hum = selectedPlayer.Character:FindFirstChild("Humanoid")
+            if hum then
+                Workspace.CurrentCamera.CameraSubject = hum
+            end
+        end
+    end
+end)()
+
+-- Lista de jogadores otimizada
+local function createPlayerButton(parent, plr)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -5, 0, 28)
+    btn.BackgroundColor3 = Color3.fromRGB(45, 15, 75)
+    btn.BackgroundTransparency = 0.4
+    btn.Text = plr.Name
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 13
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 5)
+    corner.Parent = btn
+    
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color = Color3.fromRGB(100, 0, 200)
+    btnStroke.Thickness = 1
+    btnStroke.Transparency = 0.5
+    btnStroke.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        selectedPlayer = plr
+        for _, child in pairs(parent:GetChildren()) do
+            if child:IsA("TextButton") and child ~= btn then
+                child.BackgroundColor3 = Color3.fromRGB(45, 15, 75)
+            end
+        end
+        btn.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+    end)
+end
+
+-- Atualizar lista de jogadores otimizada
+local function updatePlayersList()
+    local targetPages = {pages["Teleport 📍"], pages["Troll 🌀"], pages["Combat 🛡️"]}
+    for _, page in pairs(targetPages) do
+        for _, v in pairs(page:GetChildren()) do
+            if v:IsA("TextButton") and v.Text ~= "TELEPORT" and v.Text ~= "KILL" then
+                v:Destroy()
+            end
+        end
+    end
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= Player then
+            for _, page in pairs(targetPages) do
+                createPlayerButton(page, plr)
+            end
+        end
+    end
+end
+
+-- Botão Teleport
+local teleportBtn = Instance.new("TextButton")
+teleportBtn.Size = UDim2.new(1, -5, 0, 30)
+teleportBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+teleportBtn.BackgroundTransparency = 0.3
+teleportBtn.Text = "TELEPORT"
+teleportBtn.Font = Enum.Font.GothamBold
+teleportBtn.TextSize = 13
+teleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+teleportBtn.Parent = pages["Teleport 📍"]
+
+local tpCorner = Instance.new("UICorner")
+tpCorner.CornerRadius = UDim.new(0, 5)
+tpCorner.Parent = teleportBtn
+
+teleportBtn.MouseButton1Click:Connect(function()
+    if selectedPlayer and selectedPlayer.Character and RootPart then
+        local targetRoot = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRoot then
+            RootPart.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
+        end
+    end
+end)
+
+-- Botão Kill
+local killBtn = Instance.new("TextButton")
+killBtn.Size = UDim2.new(1, -5, 0, 30)
+killBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+killBtn.BackgroundTransparency = 0.3
+killBtn.Text = "KILL"
+killBtn.Font = Enum.Font.GothamBold
+killBtn.TextSize = 13
+killBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+killBtn.Parent = pages["Combat 🛡️"]
+
+local killCorner = Instance.new("UICorner")
+killCorner.CornerRadius = UDim.new(0, 5)
+killCorner.Parent = killBtn
+
+killBtn.MouseButton1Click:Connect(function()
+    if selectedPlayer and selectedPlayer.Character then
+        local hum = selectedPlayer.Character:FindFirstChild("Humanoid")
+        if hum then
+            hum.Health = 0
+        end
+    end
+end)
+
+-- Atualizar lista periodicamente
+coroutine.wrap(function()
+    while task.wait(2) do
+        updatePlayersList()
+    end
+end)()
+
+-- Infinite Jump
+UserInputService.JumpRequest:Connect(function()
+    if infiniteJump and Humanoid then
+        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- God Mode (proteção contínua)
+coroutine.wrap(function()
+    while task.wait(0.1) do
+        if godMode and Character then
+            local hum = Character:FindFirstChild("Humanoid")
+            if hum and hum.Health < hum.MaxHealth then
+                hum.Health = hum.MaxHealth
+            end
+        end
+    end
+end)()
+
+-- Reconectar quando o personagem muda
+Player.CharacterAdded:Connect(function(char)
+    Character = char
+    Humanoid = char:WaitForChild("Humanoid")
+    RootPart = char:WaitForChild("HumanoidRootPart")
+    
+    if godMode and Humanoid then
+        Humanoid.MaxHealth = 999999
+        Humanoid.Health = 999999
+    end
+    
+    if speedValue and Humanoid then
+        Humanoid.WalkSpeed = speedValue
+    end
+    
+    if antiKnockback and RootPart then
+        RootPart.CustomPhysicalProperties = PhysicalProperties.new(9999, 0.3, 0.5)
+    end
+end)
+
+-- Função de minimizar/maximizar
+MinimizeButton.MouseButton1Click:Connect(function()
+    menuMinimized = not menuMinimized
+    if menuMinimized then
+        MainFrame.Visible = false
+        MinimizedBall.Visible = true
+        -- Animação de surgimento da bolinha
+        MinimizedBall.Size = UDim2.new(0, 0, 0, 0)
+        TweenService:Create(MinimizedBall, TweenInfo.new(0.3, Enum.EasingStyle.Bounce), {Size = UDim2.new(0, 60, 0, 60)}):Play()
+    else
+        MainFrame.Visible = true
+        MinimizedBall.Visible = false
+    end
+end)
+
+-- Clique na bolinha para restaurar
+MinimizedBall.MouseButton1Click:Connect(function()
+    menuMinimized = false
+    MinimizedBall.Visible = false
+    MainFrame.Visible = true
+    -- Animação de restauração
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {Size = UDim2.new(0, 420, 0, 420)}):Play()
+end)
+
+-- Tornar arrastável (MENU PRINCIPAL)
+local draggingMain = false
+local dragStart, startPos
+
+MainFrame.InputBegan:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        draggingMain = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+
+-- Tornar arrastável (BOLINHA)
+local draggingBall = false
+local ballDragStart, ballStartPos
+
+MinimizedBall.InputBegan:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        draggingBall = true
+        ballDragStart = input.Position
+        ballStartPos = MinimizedBall.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if draggingMain and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    elseif draggingBall and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - ballDragStart
+        MinimizedBall.Position = UDim2.new(ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X, ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingMain = false
+        draggingBall = false
+    end
+end)
+
+-- Fechar GUI
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- Mostrar primeira página por padrão
+pages["ESP 👁️"].Visible = true
+updatePlayersList()
+
+print("Dark Hub v1.5 carregado com sucesso!")
+print("Clique em − para minimizar o menu!")
+print("A bolinha preta com >:3 é seu menu minimizado!")
